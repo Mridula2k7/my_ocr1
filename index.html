@@ -3,16 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OCR Scanner App — Front & Rear Camera</title>
+<title>Advanced OCR Scanner App</title>
+
 <style>
 body { font-family: Arial; background:#0f172a; color:white; margin:0; padding:0; text-align:center; }
-nav { display:flex; justify-content:space-around; background:#1e293b; padding:12px; }
+nav { display:flex; justify-content:space-around; background:#1e293b; padding:12px; position:sticky; top:0; z-index:10; }
 nav button { background:#3b82f6; border:none; color:white; padding:10px 16px; border-radius:6px; cursor:pointer; }
+
 .page { display:none; padding:20px; }
 .active { display:block; }
-#preview, #cameraPreview { width:90%; max-width:300px; border-radius:10px; margin-top:15px; }
+
+.inputBar {
+    width:90%; padding:10px; margin-top:10px;
+    border-radius:8px; border:none;
+}
+
+#preview, #cameraPreview { width:90%; max-width:330px; border-radius:10px; margin-top:15px; }
 #resultBox { margin-top:20px; background:#1e293b; padding:15px; border-radius:10px; white-space:pre-wrap; }
-#savePopup { position: fixed; bottom:20px; right:20px; background:#4caf50; color:white; padding:12px 18px; border-radius:8px; display:none; font-size:16px; }
+
+.historyItem {
+    background:#1e293b; padding:14px; border-radius:10px;
+    margin:10px; text-align:left;
+}
+
+#savePopup {
+    position:fixed; bottom:20px; right:20px;
+    background:#4caf50; color:white;
+    padding:12px 18px; border-radius:8px;
+    display:none; font-size:16px;
+}
+
 </style>
 </head>
 <body>
@@ -23,35 +43,45 @@ nav button { background:#3b82f6; border:none; color:white; padding:10px 16px; bo
     <button onclick="showPage('historyPage')">History</button>
 </nav>
 
-<!-- HOME PAGE -->
+<!-- HOME -->
 <div id="homePage" class="page active">
-    <h1>📄 OCR Scanner App</h1>
-    <p>Upload / Capture → OCR → Save → View History</p>
+    <h1>📄 Advanced OCR Scanner</h1>
+    <p>Upload / Capture → OCR → AI Summary → Save → Export → History</p>
 </div>
 
 <!-- SCAN PAGE -->
 <div id="scanPage" class="page">
-    <h2>OCR Scanner</h2>
-    <input type="file" id="fileInput" accept="image/*" class="btn"><br><br>
-    <button onclick="openCamera('environment')" class="btn">📷 Rear Camera</button>
-    <button onclick="openCamera('user')" class="btn">📷 Front Camera</button>
+    <h2>📷 Scan Document</h2>
+
+    <input type="file" id="fileInput" accept="image/*" class="inputBar">
+
+    <button onclick="openCamera('environment')">📸 Rear Camera</button>
+    <button onclick="openCamera('user')">🤳 Front Camera</button>
+
     <video id="cameraPreview" autoplay playsinline style="display:none;"></video>
     <canvas id="cameraCanvas" style="display:none;"></canvas>
+
     <img id="preview" style="display:none;">
-    <button onclick="startOCR()" class="btn">Extract Text</button>
+    <button onclick="startOCR()" class="inputBar">Extract Text</button>
+
     <div id="resultBox" style="display:none;"></div>
+    <button id="summaryBtn" style="display:none;" onclick="generateSummary()">✨ Generate Summary</button>
+    <button id="pdfBtn" style="display:none;" onclick="exportPDF()">📄 Export PDF</button>
+    <button id="speakBtn" style="display:none;" onclick="speakText()">🔊 Read Aloud</button>
 </div>
 
 <!-- HISTORY PAGE -->
 <div id="historyPage" class="page">
-    <h2>Saved OCR History</h2>
+    <h2>📚 OCR History</h2>
+    <input type="text" id="searchBar" class="inputBar" placeholder="Search text..." oninput="filterHistory()">
     <div id="historyList">Loading...</div>
 </div>
 
 <div id="savePopup">Saved to Firebase!</div>
 
-<!-- Tesseract -->
+<!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <!-- Firebase -->
 <script type="module">
@@ -71,6 +101,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// SAVE TO FIREBASE
 window.saveToFirebase = async function(text){
     if(!text) return;
     await addDoc(collection(db, "ocr_texts"), {
@@ -81,17 +112,19 @@ window.saveToFirebase = async function(text){
     loadHistory();
 };
 
+// LOAD HISTORY
 window.loadHistory = async function(){
     const list = document.getElementById("historyList");
     list.innerHTML = "Loading...";
     const q = query(collection(db, "ocr_texts"), orderBy("time","desc"));
     const querySnapshot = await getDocs(q);
-    if(querySnapshot.empty){ list.innerHTML="No history found."; return; }
+
     let html="";
     querySnapshot.forEach(doc => {
-        html += `<div style='background:#1e293b;margin:10px;padding:12px;border-radius:8px;'>${doc.data().text}</div>`;
+        html += `<div class="historyItem">${doc.data().text}</div>`;
     });
-    list.innerHTML = html;
+
+    list.innerHTML = html || "No history found.";
 };
 loadHistory();
 </script>
@@ -108,9 +141,9 @@ function showPopup(){
     setTimeout(()=>p.style.display="none",3000);
 }
 
+let selectedImage=null;
 const preview=document.getElementById("preview");
 const fileInput=document.getElementById("fileInput");
-let selectedImage=null;
 
 fileInput.addEventListener("change",()=>{
     selectedImage=fileInput.files[0];
@@ -120,21 +153,17 @@ fileInput.addEventListener("change",()=>{
 
 let stream=null;
 
-// CAMERA OPEN (front/back)
-async function openCamera(facingMode="user"){
+// CAMERA OPEN
+async function openCamera(facingMode){
     if(stream) stream.getTracks().forEach(t=>t.stop());
-    try{
-        stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode }, audio:false });
-        const video=document.getElementById("cameraPreview");
-        video.srcObject=stream;
-        video.style.display="block";
-        video.onclick=captureFromCamera;
-    }catch(err){
-        alert("Camera error: "+err.message);
-    }
+    stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode } });
+    const video=document.getElementById("cameraPreview");
+    video.srcObject=stream;
+    video.style.display="block";
+    video.onclick=captureFromCamera;
 }
 
-// CAPTURE PHOTO
+// CAPTURE
 function captureFromCamera(){
     const video=document.getElementById("cameraPreview");
     const canvas=document.getElementById("cameraCanvas");
@@ -147,24 +176,68 @@ function captureFromCamera(){
         preview.style.display="block";
     });
     video.style.display="none";
-    if(stream) stream.getTracks().forEach(track=>track.stop());
+    stream.getTracks().forEach(track=>track.stop());
 }
 
-// OCR PROCESS
+// OCR
 async function startOCR(){
-    if(!selectedImage){ alert("Upload OR capture an image first"); return; }
+    if(!selectedImage){ alert("Upload or capture an image first!"); return; }
     const resultBox=document.getElementById("resultBox");
     resultBox.style.display="block";
     resultBox.innerText="Processing...";
+
     const worker = await Tesseract.createWorker();
     await worker.load();
     await worker.loadLanguage('eng');
     await worker.initialize('eng');
+
     const { data:{ text } } = await worker.recognize(selectedImage);
     resultBox.innerText=text;
     await worker.terminate();
+
     saveToFirebase(text);
+
+    document.getElementById("summaryBtn").style.display="block";
+    document.getElementById("pdfBtn").style.display="block";
+    document.getElementById("speakBtn").style.display="block";
 }
+
+// SUMMARY
+function generateSummary(){
+    const text=document.getElementById("resultBox").innerText;
+    const sentences=text.split(". ");
+    let summary="";
+
+    for(let i=0;i<Math.min(3,sentences.length);i++){
+        summary+=sentences[i]+". ";
+    }
+    alert("✨ Summary:\n\n" + summary);
+}
+
+// EXPORT PDF
+function exportPDF(){
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    pdf.text(document.getElementById("resultBox").innerText,10,10);
+    pdf.save("OCR_Text.pdf");
+}
+
+// SPEAK
+function speakText(){
+    const msg=new SpeechSynthesisUtterance(document.getElementById("resultBox").innerText);
+    speechSynthesis.speak(msg);
+}
+
+// SEARCH FILTER
+function filterHistory(){
+    const input=document.getElementById("searchBar").value.toLowerCase();
+    const items=document.querySelectorAll('.historyItem');
+    items.forEach(item=>{
+        item.style.display=item.innerText.toLowerCase().includes(input) ? "block" : "none";
+    });
+}
+
 </script>
+
 </body>
 </html>
