@@ -88,15 +88,15 @@ nav button { background:#3b82f6; border:none; color:white; padding:10px 16px; bo
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const firebaseConfig = {
+ const firebaseConfig = {
     apiKey: "AIzaSyD69D9mpeIdbGTWVKTlb7QD0EQdE3p7KSM",
     authDomain: "my-ocr-c7d74.firebaseapp.com",
     projectId: "my-ocr-c7d74",
-    storageBucket: "my-ocr-c7d74.appspot.com",
+    storageBucket: "my-ocr-c7d74.firebasestorage.app",
     messagingSenderId: "306025938236",
-    appId: "1:306025938236:web:3c95f72627c89f87f6f239",
-    measurementId: "G-9N780BCMPZ"
-};
+    appId: "1:306025938236:web:709acc03d25e6638f6f239",
+    measurementId: "G-8Y8CTV63W5"
+  };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -241,3 +241,4 @@ function filterHistory(){
 
 </body>
 </html>
+
