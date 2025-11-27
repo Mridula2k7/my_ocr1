@@ -1,249 +1,624 @@
-<!DOCTYPE html>
+
+   
+
+
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Advanced OCR Scanner App</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OCR Table Pro — Dark + AutoCrop (Pro)</title>
+
+<!-- OpenCV.js (for edge detect & crop) -->
+<script async src="https://docs.opencv.org/4.5.5/opencv.js"></script>
+
+<!-- Tesseract v4 (recognize API) -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+
+<!-- SheetJS for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Firebase modular SDK (v11) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getFirestore, collection, addDoc, serverTimestamp, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+  import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyD69D9mpeIdbGTWVKTlb7QD0EQdE3p7KSM",
+    authDomain: "my-ocr-c7d74.firebaseapp.com",
+    projectId: "my-ocr-c7d74",
+    storageBucket: "my-ocr-c7d74.firebasestorage.app",
+    messagingSenderId: "306025938236",
+    appId: "1:306025938236:web:709acc03d25e6638f6f239",
+    measurementId: "G-8Y8CTV63W5"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
+  window._firebase = {
+    db, storage, addDoc, collection, serverTimestamp, getDocs, query, orderBy, storageRef, uploadBytes, getDownloadURL
+  };
+</script>
 
 <style>
-body { font-family: Arial; background:#0f172a; color:white; margin:0; padding:0; text-align:center; }
-nav { display:flex; justify-content:space-around; background:#1e293b; padding:12px; position:sticky; top:0; z-index:10; }
-nav button { background:#3b82f6; border:none; color:white; padding:10px 16px; border-radius:6px; cursor:pointer; }
-
-.page { display:none; padding:20px; }
-.active { display:block; }
-
-.inputBar {
-    width:90%; padding:10px; margin-top:10px;
-    border-radius:8px; border:none;
+:root{
+  --bg: #071125;
+  --panel: #0f1724;
+  --muted: #9fb0c8;
+  --accent-start:#2d9cff; --accent-end:#6ee8d5;
+  --card: rgba(255,255,255,0.02);
+  --radius:12px;
+  --text-on-panel: #e6f2ff;
 }
-
-#preview, #cameraPreview { width:90%; max-width:330px; border-radius:10px; margin-top:15px; }
-#resultBox { margin-top:20px; background:#1e293b; padding:15px; border-radius:10px; white-space:pre-wrap; }
-
-.historyItem {
-    background:#1e293b; padding:14px; border-radius:10px;
-    margin:10px; text-align:left;
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:Inter,Segoe UI,Arial; background:linear-gradient(180deg,#061026,#071125); color:var(--text-on-panel);
+  min-height:100vh; padding:18px;
 }
+.wrap{max-width:1100px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:56px;height:56px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;background:linear-gradient(135deg,var(--accent-start),var(--accent-end));color:#042a3a}
+h1{margin:0;font-size:20px}
+.subtitle{color:var(--muted);font-size:13px}
 
-#savePopup {
-    position:fixed; bottom:20px; right:20px;
-    background:#4caf50; color:white;
-    padding:12px 18px; border-radius:8px;
-    display:none; font-size:16px;
-}
+/* dark/light toggle */
+.theme-toggle{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px;border-radius:10px;color:var(--muted);cursor:pointer}
 
+/* layout */
+.layout{display:grid;grid-template-columns:1fr 420px;gap:18px}
+@media(max-width:980px){.layout{grid-template-columns:1fr}}
+
+/* cards */
+.card{background:var(--card);padding:14px;border-radius:var(--radius);border:1px solid rgba(255,255,255,0.03);box-shadow:0 12px 40px rgba(0,0,0,0.45)}
+.muted{color:var(--muted);font-size:13px}
+
+/* rows & controls */
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{padding:10px 12px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+.btn-primary{background:linear-gradient(90deg,var(--accent-start),var(--accent-end));color:#042a3a}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+.btn-danger{background:linear-gradient(90deg,#ff7b7b,#ffb3b3);color:#420000}
+
+/* preview/video */
+#preview, video.preview-video { width:100%; border-radius:10px; display:block; max-height:420px; object-fit:contain; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.02) }
+
+/* progress */
+.progress{height:10px;background:rgba(255,255,255,0.02);border-radius:999px;overflow:hidden;margin-top:12px;display:none}
+.progress>i{height:100%;width:0;background:linear-gradient(90deg,#8bdcff,#2d9cff);transition:width 120ms linear}
+
+/* table */
+#tableWrapper{margin-top:12px;overflow:auto;max-height:420px;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.02);background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0.006))}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 8px;border:1px solid rgba(255,255,255,0.02);background:#fff;color:#04202b}
+td[contenteditable]{background:#fcfffd;min-width:110px}
+
+/* right panel small cards */
+.right .card + .card{margin-top:14px}
+
+/* toast */
+#toast{position:fixed;right:18px;bottom:18px;background:#0f1724;border-left:4px solid #49c5ff;padding:12px 14px;border-radius:8px;display:none;color:#e6f7ff}
 </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="header">
+      <div class="brand"><div class="logo">RF</div><div><h1>OCR Table Pro</h1><div class="subtitle">Auto-crop • Table detection • Export • Cloud save</div></div></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="themeToggle" class="theme-toggle">Toggle dark/light</button>
+        <div class="muted">Serve on <code>localhost</code> or HTTPS</div>
+      </div>
+    </div>
 
-<nav>
-    <button onclick="showPage('homePage')">Home</button>
-    <button onclick="showPage('scanPage')">Scan</button>
-    <button onclick="showPage('historyPage')">History</button>
-</nav>
+    <div class="layout">
+      <!-- LEFT -->
+      <section>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div class="muted">Input</div><strong>Upload or capture</strong></div>
+            <div class="small-muted">Auto-crop (OpenCV) enabled</div>
+          </div>
 
-<!-- HOME -->
-<div id="homePage" class="page active">
-    <h1>📄 Advanced OCR Scanner</h1>
-    <p>Upload / Capture → OCR → AI Summary → Save → Export → History</p>
-</div>
+          <div class="row" style="margin-top:12px">
+            <input id="fileInput" type="file" accept="image/*" style="display:none">
+            <button id="btnUpload" class="btn btn-ghost">Upload</button>
+            <button id="btnOpenCamera" class="btn btn-ghost">Open Camera</button>
+            <button id="btnCapture" class="btn btn-ghost" style="display:none">Capture</button>
+            <label style="margin-left:auto" class="muted"><input id="autoCropToggle" type="checkbox" checked> Auto-crop</label>
+          </div>
 
-<!-- SCAN PAGE -->
-<div id="scanPage" class="page">
-    <h2>📷 Scan Document</h2>
+          <div style="margin-top:12px">
+            <video id="videoPreview" class="preview-video" style="display:none"></video>
+            <img id="preview" src="" alt="preview" style="display:block;margin-top:8px">
+          </div>
 
-    <input type="file" id="fileInput" accept="image/*" class="inputBar">
+          <div class="progress" id="progressBar"><i></i></div>
 
-    <button onclick="openCamera('environment')">📸 Rear Camera</button>
-    <button onclick="openCamera('user')">🤳 Front Camera</button>
+          <div class="row" style="margin-top:12px">
+            <button id="scanTextBtn" class="btn btn-primary">Scan Text</button>
+            <button id="scanTableBtn" class="btn btn-primary">Scan Table</button>
+            <button id="clearBtn" class="btn btn-ghost">Clear</button>
+          </div>
 
-    <video id="cameraPreview" autoplay playsinline style="display:none;"></video>
-    <canvas id="cameraCanvas" style="display:none;"></canvas>
+          <div style="margin-top:10px" class="small-muted">Tip: use good lighting; enable Auto-crop to remove background.</div>
+        </div>
 
-    <img id="preview" style="display:none;">
-    <button onclick="startOCR()" class="inputBar">Extract Text</button>
+        <div class="card" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div class="muted">Parsed Table</div><strong id="tableInfo">(Run table scan)</strong></div>
+            <div style="display:flex;gap:10px">
+              <button id="exportExcelBtn" class="btn btn-ghost">Export .xlsx</button>
+              <button id="saveAllBtn" class="btn btn-primary">Save Rows</button>
+            </div>
+          </div>
 
-    <div id="resultBox" style="display:none;"></div>
-    <button id="summaryBtn" style="display:none;" onclick="generateSummary()">✨ Generate Summary</button>
-    <button id="pdfBtn" style="display:none;" onclick="exportPDF()">📄 Export PDF</button>
-    <button id="speakBtn" style="display:none;" onclick="speakText()">🔊 Read Aloud</button>
-</div>
+          <div id="tableWrapper">
+            <table id="resultTable"><thead id="tableHead"><tr><th>#</th><th>Column1</th></tr></thead>
+              <tbody id="tableBody"><tr><td colspan="2" class="small-muted">No table yet.</td></tr></tbody></table>
+          </div>
+        </div>
+      </section>
 
-<!-- HISTORY PAGE -->
-<div id="historyPage" class="page">
-    <h2>📚 OCR History</h2>
-    <input type="text" id="searchBar" class="inputBar" placeholder="Search text..." oninput="filterHistory()">
-    <div id="historyList">Loading...</div>
-</div>
+      <!-- RIGHT -->
+      <aside class="right">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div class="muted">Result</div><strong>Extracted raw text</strong></div>
+            <div style="display:flex;gap:8px"><button id="copyTextBtn" class="btn btn-ghost">Copy</button><button id="saveTextBtn" class="btn btn-ghost">Save Text</button></div>
+          </div>
 
-<div id="savePopup">Saved to Firebase!</div>
+          <div id="resultBox" style="margin-top:12px;min-height:140px;white-space:pre-wrap" class="muted">No OCR yet.</div>
+        </div>
 
-<!-- Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        <div class="card" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Saved Rows</strong><div class="small-muted">Firestore • Recent</div></div>
+            <div><button id="refreshHistoryBtn" class="btn btn-ghost">Refresh</button></div>
+          </div>
 
-<!-- Firebase -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+          <div id="historyBox" style="margin-top:12px;max-height:320px;overflow:auto" class="small-muted">No history loaded.</div>
+        </div>
+      </aside>
+    </div>
+  </div>
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-      const firebaseConfig = {
-    apiKey: "AIzaSyCh_IRxmDB8FN10HAAsB56KTX_SwZs28wM",
-    authDomain: "fir-9a78e.firebaseapp.com",
-    projectId: "fir-9a78e",
-    storageBucket: "fir-9a78e.firebasestorage.app",
-    messagingSenderId: "510654220450",
-    appId: "1:510654220450:web:cde7964babb86ee64ceffb",
-    measurementId: "G-6J32K7DDLZ"
-  };
-
-
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// SAVE TO FIREBASE
-window.saveToFirebase = async function(text){
-    if(!text) return;
-    await addDoc(collection(db, "ocr_texts"), {
-        text: text,
-        time: new Date()
-    });
-    showPopup();
-    loadHistory();
-};
-
-// LOAD HISTORY
-window.loadHistory = async function(){
-    const list = document.getElementById("historyList");
-    list.innerHTML = "Loading...";
-    const q = query(collection(db, "ocr_texts"), orderBy("time","desc"));
-    const querySnapshot = await getDocs(q);
-
-    let html="";
-    querySnapshot.forEach(doc => {
-        html += `<div class="historyItem">${doc.data().text}</div>`;
-    });
-
-    list.innerHTML = html || "No history found.";
-};
-loadHistory();
-</script>
+  <div id="toast">Saved ✔</div>
 
 <script>
-function showPage(id){
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+/* =========================
+   Globals & UI elements
+   ========================= */
+const FB = window._firebase;
+const fileInput = document.getElementById('fileInput');
+const btnUpload = document.getElementById('btnUpload');
+const btnOpenCamera = document.getElementById('btnOpenCamera');
+const btnCapture = document.getElementById('btnCapture');
+const videoPreview = document.getElementById('videoPreview');
+const previewImg = document.getElementById('preview');
+const progressBar = document.getElementById('progressBar');
+const progressFill = progressBar.querySelector('i');
+const resultBox = document.getElementById('resultBox');
+const tableHead = document.getElementById('tableHead');
+const tableBody = document.getElementById('tableBody');
+const tableInfo = document.getElementById('tableInfo');
+const toast = document.getElementById('toast');
+const themeToggle = document.getElementById('themeToggle');
+const autoCropToggle = document.getElementById('autoCropToggle');
+
+let selectedFile = null;
+let cameraStream = null;
+let parsedRows = [];
+let detectedHeaders = [];
+let lastRawText = '';
+let openCvReady = false;
+
+/* ---------- OpenCV runtime init ---------- */
+function waitForOpenCV(){
+  return new Promise((res, rej) => {
+    if(window.cv && window.cv.Mat) { openCvReady = true; return res(); }
+    const check = setInterval(()=>{
+      if(window.cv && window.cv.Mat){
+        clearInterval(check); openCvReady = true; res();
+      }
+    }, 100);
+    setTimeout(()=> {
+      if(!openCvReady) {
+        clearInterval(check);
+        console.warn('OpenCV timed out; auto-crop will be disabled.');
+        res(); // resolve anyway to let app continue
+      }
+    }, 15000);
+  });
 }
+waitForOpenCV();
 
-function showPopup(){
-    const p=document.getElementById("savePopup");
-    p.style.display="block";
-    setTimeout(()=>p.style.display="none",3000);
+/* ---------- Theme toggle ---------- */
+function applyTheme(mode){
+  if(mode === 'light'){
+    document.documentElement.style.setProperty('--bg','#f5f7fb');
+    document.documentElement.style.setProperty('--panel','#ffffff');
+    document.documentElement.style.setProperty('--text-on-panel','#04202b');
+    document.body.style.background = 'linear-gradient(180deg,#f8fafc,#f5f7fb)';
+  } else {
+    document.documentElement.style.setProperty('--bg','#071125');
+    document.documentElement.style.setProperty('--panel','#0f1724');
+    document.documentElement.style.setProperty('--text-on-panel','#e6f2ff');
+    document.body.style.background = 'linear-gradient(180deg,#061026,#071125)';
+  }
+  localStorage.setItem('ocr_theme', mode);
 }
+const savedTheme = localStorage.getItem('ocr_theme') || 'dark';
+applyTheme(savedTheme);
+themeToggle.addEventListener('click', ()=> applyTheme(localStorage.getItem('ocr_theme') === 'dark' ? 'light' : 'dark') );
 
-let selectedImage=null;
-const preview=document.getElementById("preview");
-const fileInput=document.getElementById("fileInput");
+/* ---------- small helpers ---------- */
+function showProgress(v){ progressBar.style.display = (v < 1) ? 'block' : 'none'; progressFill.style.width = Math.round(Math.max(0,Math.min(1,v))*100) + '%'; }
+function showToast(msg='Saved'){ toast.textContent = msg; toast.style.display = 'block'; setTimeout(()=> toast.style.display = 'none', 2200); }
+function escapeHtml(s){ if(!s) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 
-fileInput.addEventListener("change",()=>{
-    selectedImage=fileInput.files[0];
-    preview.src=URL.createObjectURL(selectedImage);
-    preview.style.display="block";
+/* ---------- Upload & camera ---------- */
+btnUpload.addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', (e)=> {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  selectedFile = f;
+  previewImg.src = URL.createObjectURL(f);
+  previewImg.style.display = 'block';
+  videoPreview.style.display = 'none';
+  parsedRows = []; detectedHeaders = []; lastRawText = '';
+  renderEmptyTable();
+  resultBox.textContent = 'Image selected. Use Auto-crop + Scan.';
 });
 
-let stream=null;
+btnOpenCamera.addEventListener('click', async ()=>{
+  try{
+    if(cameraStream) cameraStream.getTracks().forEach(t=>t.stop());
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio:false });
+    videoPreview.srcObject = cameraStream; videoPreview.style.display = 'block';
+    previewImg.style.display = 'none';
+    btnCapture.style.display = 'inline-block';
+    btnOpenCamera.style.display = 'none';
+    btnCapture.onclick = captureFromVideo;
+  }catch(err){ alert('Camera error: ' + (err.message||err)); }
+});
 
-// CAMERA OPEN
-async function openCamera(facingMode){
-    if(stream) stream.getTracks().forEach(t=>t.stop());
-    stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode } });
-    const video=document.getElementById("cameraPreview");
-    video.srcObject=stream;
-    video.style.display="block";
-    video.onclick=captureFromCamera;
+function captureFromVideo(){
+  if(!cameraStream) return;
+  const video = videoPreview;
+  const w = video.videoWidth || 1280;
+  const h = video.videoHeight || 720;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  c.toBlob(b=>{
+    selectedFile = b;
+    previewImg.src = URL.createObjectURL(b); previewImg.style.display = 'block';
+    cameraStream.getTracks().forEach(t=>t.stop());
+    cameraStream = null;
+    videoPreview.style.display = 'none';
+    btnCapture.style.display = 'none';
+    btnOpenCamera.style.display = 'inline-block';
+  }, 'image/jpeg', 0.95);
 }
 
-// CAPTURE
-function captureFromCamera(){
-    const video=document.getElementById("cameraPreview");
-    const canvas=document.getElementById("cameraCanvas");
-    canvas.width=video.videoWidth;
-    canvas.height=video.videoHeight;
-    canvas.getContext("2d").drawImage(video,0,0);
-    canvas.toBlob(blob=>{
-        selectedImage=blob;
-        preview.src=URL.createObjectURL(blob);
-        preview.style.display="block";
-    });
-    video.style.display="none";
-    stream.getTracks().forEach(track=>track.stop());
-}
+/* ---------- OpenCV-based edge detect & crop ----------
+   returns a Blob (JPEG) of cropped document OR null on fail.
+*/
+async function detectEdgesAndCrop(blob){
+  await waitForOpenCV();
+  if(!openCvReady || !window.cv) return null;
+  // convert blob -> Image
+  const dataUrl = await blobToDataURL(blob);
+  const img = new Image();
+  const ld = new Promise((res,rej)=>{ img.onload = ()=> res(); img.onerror = rej; });
+  img.src = dataUrl;
+  await ld;
 
-// OCR
-async function startOCR(){
-    if(!selectedImage){ alert("Upload or capture an image first!"); return; }
-    const resultBox=document.getElementById("resultBox");
-    resultBox.style.display="block";
-    resultBox.innerText="Processing...";
+  // create cv mats
+  const src = cv.imread(img);
+  let dst = new cv.Mat();
+  // convert to gray
+  cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+  // blur & adaptive threshold
+  cv.GaussianBlur(dst, dst, new cv.Size(5,5), 0);
+  // Canny
+  cv.Canny(dst, dst, 50, 150);
+  // find contours
+  const contours = new cv.MatVector();
+  const hierarchy = new cv.Mat();
+  cv.findContours(dst, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
-    const worker = await Tesseract.createWorker();
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
+  // find largest quad contour
+  let maxArea = 0;
+  let approxContour = null;
+  for(let i=0;i<contours.size();i++){
+    const cnt = contours.get(i);
+    const area = cv.contourArea(cnt);
+    if(area < 1000) { cnt.delete(); continue; }
+    const peri = cv.arcLength(cnt, true);
+    const approx = new cv.Mat();
+    cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+    if(approx.rows === 4 && area > maxArea){
+      maxArea = area;
+      approxContour = approx;
+    } else { approx.delete(); }
+    cnt.delete();
+  }
 
-    const { data:{ text } } = await worker.recognize(selectedImage);
-    resultBox.innerText=text;
-    await worker.terminate();
-
-    saveToFirebase(text);
-
-    document.getElementById("summaryBtn").style.display="block";
-    document.getElementById("pdfBtn").style.display="block";
-    document.getElementById("speakBtn").style.display="block";
-}
-
-// SUMMARY
-function generateSummary(){
-    const text=document.getElementById("resultBox").innerText;
-    const sentences=text.split(". ");
-    let summary="";
-
-    for(let i=0;i<Math.min(3,sentences.length);i++){
-        summary+=sentences[i]+". ";
+  let resultBlob = null;
+  if(approxContour){
+    // get corner points and sort them (tl,tr,br,bl)
+    const pts = [];
+    for(let i=0;i<4;i++){
+      pts.push({ x: approxContour.intPtr(i,0)[0], y: approxContour.intPtr(i,0)[1] });
     }
-    alert("✨ Summary:\n\n" + summary);
+    // sort by sum & difference
+    pts.sort((a,b)=> (a.x+a.y) - (b.x+b.y));
+    const tl = pts[0];
+    const br = pts[3];
+    const others = [pts[1], pts[2]];
+    let tr = others[0], bl = others[1];
+    if( (tr.x - bl.x) < 0 ) { const tmp = tr; tr = bl; bl = tmp; }
+
+    // compute width/height for destination
+    const widthA = Math.hypot(br.x - bl.x, br.y - bl.y);
+    const widthB = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+    const maxW = Math.max(Math.round(widthA), Math.round(widthB));
+    const heightA = Math.hypot(tr.x - br.x, tr.y - br.y);
+    const heightB = Math.hypot(tl.x - bl.x, tl.y - bl.y);
+    const maxH = Math.max(Math.round(heightA), Math.round(heightB));
+
+    const srcTri = cv.matFromArray(4,1,cv.CV_32FC2, [tl.x,tl.y, tr.x,tr.y, br.x,br.y, bl.x,bl.y]);
+    const dstTri = cv.matFromArray(4,1,cv.CV_32FC2, [0,0, maxW-1,0, maxW-1,maxH-1, 0,maxH-1]);
+    const M = cv.getPerspectiveTransform(srcTri, dstTri);
+    const dstMat = new cv.Mat();
+    const dsize = new cv.Size(maxW, maxH);
+    cv.warpPerspective(src, dstMat, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+    // convert dstMat to blob
+    const canvas = document.createElement('canvas');
+    canvas.width = maxW; canvas.height = maxH;
+    cv.imshow(canvas, dstMat);
+    resultBlob = await new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', 0.92));
+    // cleanup
+    dstMat.delete(); srcTri.delete(); dstTri.delete(); M.delete();
+    approxContour.delete();
+  }
+
+  // cleanup
+  contours.delete(); hierarchy.delete(); src.delete(); dst.delete();
+
+  return resultBlob; // may be null
 }
 
-// EXPORT PDF
-function exportPDF(){
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
-    pdf.text(document.getElementById("resultBox").innerText,10,10);
-    pdf.save("OCR_Text.pdf");
+/* ---------- helper: blob->dataURL ---------- */
+function blobToDataURL(blob){
+  return new Promise((res,rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=> res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
 }
 
-// SPEAK
-function speakText(){
-    const msg=new SpeechSynthesisUtterance(document.getElementById("resultBox").innerText);
-    speechSynthesis.speak(msg);
+/* --------------------- OCR pipeline (uses auto-crop if toggled) --------------------- */
+async function performOCRWithOptionalCrop(blob){
+  const useAutoCrop = autoCropToggle.checked;
+  let blobToUse = blob;
+  if(useAutoCrop && openCvReady){
+    try{
+      showProgress(0.05);
+      const cropped = await detectEdgesAndCrop(blob);
+      if(cropped) {
+        blobToUse = cropped;
+      } else {
+        console.warn('Auto-crop failed, using original image');
+      }
+    }catch(err){
+      console.warn('Auto-crop error', err);
+    }
+  }
+  // run Tesseract on blobToUse
+  const dataUrl = await blobToDataURL(blobToUse);
+  showProgress(0.02);
+  const res = await Tesseract.recognize(dataUrl, 'eng', {
+    logger: m => { if(m && typeof m.progress === 'number') showProgress(0.02 + (m.progress * 0.9)); }
+  });
+  showProgress(1);
+  return { text: (res && res.data && res.data.text) ? res.data.text : '', usedBlob: blobToUse };
 }
 
-// SEARCH FILTER
-function filterHistory(){
-    const input=document.getElementById("searchBar").value.toLowerCase();
-    const items=document.querySelectorAll('.historyItem');
-    items.forEach(item=>{
-        item.style.display=item.innerText.toLowerCase().includes(input) ? "block" : "none";
+/* ---------------- Table detection & parsing (same logic as earlier) ---------------- */
+function splitByGaps(line){
+  return line.split(/\t+|\s{2,}/).map(s=>s.trim()).filter(Boolean);
+}
+function detectHeaderLine(lines){
+  const candidates = lines.slice(0, Math.min(lines.length, 8));
+  let best=null,bestScore=-1;
+  for(let i=0;i<candidates.length;i++){
+    const l=candidates[i];
+    const parts = splitByGaps(l);
+    const score = parts.length*10 + l.length/100 - i;
+    if(score>bestScore){ bestScore=score; best={index:i,text:l,parts}; }
+  }
+  if(!best) return {index:0,text:lines[0]||'',parts:splitByGaps(lines[0]||'')};
+  return best;
+}
+function mapLineToColumns(line, headerPartsCount){
+  let parts = splitByGaps(line);
+  if(parts.length === headerPartsCount) return parts;
+  if(parts.length > headerPartsCount) return parts.slice(0, headerPartsCount-1).concat([parts.slice(headerPartsCount-1).join(' ')]);
+  const tokens = line.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+  if(tokens.length <= headerPartsCount){ while(tokens.length < headerPartsCount) tokens.push(''); return tokens; }
+  const out = []; for(let i=0;i<headerPartsCount-1;i++) out.push(tokens[i]||''); out.push(tokens.slice(headerPartsCount-1).join(' ')); return out;
+}
+function buildRowsFromLines(lines, headerParts){
+  const rows=[];
+  for(const lRaw of lines){
+    const l = lRaw.trim();
+    if(!l) continue;
+    const mapped = mapLineToColumns(l, headerParts.length);
+    const low = l.toLowerCase();
+    if(low.includes('page') || low.includes('total') || l === headerParts.join(' ')) continue;
+    if(mapped.join('').trim().length < 1) continue;
+    const obj = {};
+    for(let j=0;j<headerParts.length;j++){
+      const key = headerParts[j] || ('col'+(j+1)); obj[key] = mapped[j] !== undefined ? mapped[j] : '';
+    }
+    rows.push(obj);
+  }
+  return rows;
+}
+
+async function scanTableDynamic(){
+  if(!selectedFile) { alert('Please upload/capture an image first'); return; }
+  resultBox.textContent = 'Running OCR + table detection...';
+  showProgress(0.03);
+  try{
+    const { text, usedBlob } = await performOCRWithOptionalCrop(selectedFile);
+    lastRawText = text;
+    resultBox.textContent = text || 'No text detected';
+    let lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    if(lines.length === 0) { alert('No text lines found. Try a clearer image.'); return; }
+    const headerCandidate = detectHeaderLine(lines);
+    let headerParts = headerCandidate.parts && headerCandidate.parts.length >= 2 ? headerCandidate.parts : splitByGaps(headerCandidate.text);
+    if(headerParts.length < 2){
+      const tokens = headerCandidate.text.split(/\s+/).filter(Boolean);
+      const approx = Math.min(3, Math.max(2, tokens.length));
+      headerParts = []; const step = Math.ceil(tokens.length/approx);
+      for(let i=0;i<approx;i++) headerParts.push(tokens.slice(i*step,(i+1)*step).join(' '));
+    }
+    const headerIndex = headerCandidate.index || 0;
+    const remainingLines = lines.slice(headerIndex + 1);
+    let rows = buildRowsFromLines(remainingLines, headerParts);
+    if(rows.length === 0){
+      const alt = buildRowsFromLines(lines.slice(headerIndex+1), headerParts);
+      if(alt.length > 0) parsedRows = alt;
+      else { parsedRows = lines.map(l => ({ [headerParts[0] || 'Column1']: l })); headerParts = [headerParts[0] || 'Column1']; }
+    } else parsedRows = rows;
+    detectedHeaders = headerParts;
+    renderDynamicTable();
+    tableInfo.textContent = `Detected ${detectedHeaders.length} columns • ${parsedRows.length} rows`;
+  }catch(err){ console.error(err); alert('OCR failed: ' + (err && err.message ? err.message : err)); }
+  finally{ showProgress(1); }
+}
+
+/* ---------------- Render table ---------------- */
+function renderDynamicTable(){
+  tableHead.innerHTML = ''; tableBody.innerHTML = '';
+  const headers = (detectedHeaders && detectedHeaders.length) ? detectedHeaders : ['Column1'];
+  const trHead = document.createElement('tr');
+  const thIndex = document.createElement('th'); thIndex.textContent = '#'; trHead.appendChild(thIndex);
+  headers.forEach(h => { const th=document.createElement('th'); th.textContent = h||'Column'; trHead.appendChild(th); });
+  const thAct = document.createElement('th'); thAct.textContent = 'Actions'; trHead.appendChild(thAct);
+  tableHead.appendChild(trHead);
+
+  if(!parsedRows || parsedRows.length === 0){
+    const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = headers.length + 2; td.className='small-muted'; td.textContent='No rows extracted.'; tr.appendChild(td); tableBody.appendChild(tr); return;
+  }
+
+  parsedRows.forEach((rowObj, idx)=>{
+    const tr = document.createElement('tr');
+    const tdIdx = document.createElement('td'); tdIdx.textContent = String(idx+1); tr.appendChild(tdIdx);
+    headers.forEach(h => {
+      const td = document.createElement('td'); td.contentEditable = 'true'; td.dataset.row = String(idx); td.dataset.field = h; td.textContent = rowObj[h] || '';
+      td.addEventListener('input', ()=> { parsedRows[Number(td.dataset.row)][td.dataset.field] = td.textContent.trim(); });
+      tr.appendChild(td);
     });
+    const tdAct = document.createElement('td');
+    const del = document.createElement('button'); del.className='btn btn-ghost'; del.textContent='Delete'; del.addEventListener('click', ()=> { parsedRows.splice(idx,1); renderDynamicTable(); });
+    tdAct.appendChild(del); tr.appendChild(tdAct);
+    tableBody.appendChild(tr);
+  });
 }
+
+/* ---------------- Export to Excel ---------------- */
+document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
+  if(!parsedRows || parsedRows.length===0){ alert('No data to export'); return; }
+  const headers = detectedHeaders.length ? detectedHeaders : Object.keys(parsedRows[0] || {});
+  const wsData = [headers];
+  parsedRows.forEach(r => wsData.push(headers.map(h => r[h] || '')));
+  const ws = XLSX.utils.aoa_to_sheet(wsData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Table'); const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob = new Blob([wbout], { type:'application/octet-stream' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'ocr_table_' + Date.now() + '.xlsx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+
+/* ---------------- Save rows to Firebase ---------------- */
+document.getElementById('saveAllBtn').addEventListener('click', async ()=>{
+  if(!parsedRows || parsedRows.length===0){ alert('No rows to save'); return; }
+  const uploadImage = confirm('Upload source image to Firebase? OK = upload, Cancel = skip');
+  let imageUrl = null;
+  if(uploadImage && selectedFile){
+    try{
+      const name = 'ocr_images/' + Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.jpg';
+      const ref = FB.storageRef(FB.storage, name);
+      const blob = (selectedFile instanceof Blob) ? selectedFile : await (await fetch(previewImg.src)).blob();
+      await FB.uploadBytes(ref, blob); imageUrl = await FB.getDownloadURL(ref);
+    }catch(err){ console.error('image upload failed', err); alert('Image upload failed: '+ (err.message || err)); }
+  }
+
+  showProgress(0.02);
+  const headers = detectedHeaders.length ? detectedHeaders : (parsedRows[0] ? Object.keys(parsedRows[0]) : []);
+  for(let i=0;i<parsedRows.length;i++){
+    const row = parsedRows[i];
+    const doc = { source_image: imageUrl || null, created_at: FB.serverTimestamp() };
+    headers.forEach(h => doc[h] = row[h] || null);
+    try{ await FB.addDoc(FB.collection(FB.db, 'ocr_dynamic_rows'), doc); }catch(err){ console.error('save failed', err); }
+    showProgress(0.02 + ((i+1)/parsedRows.length)*0.95);
+  }
+  showProgress(1); showToast('Saved rows to Firebase'); alert('Saved ' + parsedRows.length + ' rows (ocr_dynamic_rows).');
+});
+
+/* ---------------- Save raw text ---------------- */
+document.getElementById('saveTextBtn').addEventListener('click', async ()=>{
+  if(!lastRawText){ alert('No OCR text to save'); return; }
+  try{ await FB.addDoc(FB.collection(FB.db, 'ocr_texts'), { text: lastRawText, created_at: FB.serverTimestamp() }); showToast('Saved raw text'); } catch(err){ alert('Save failed: '+ (err.message || err)); }
+});
+
+/* ---------------- Copy raw text ---------------- */
+document.getElementById('copyTextBtn').addEventListener('click', ()=> {
+  if(!lastRawText) return alert('No text to copy');
+  navigator.clipboard.writeText(lastRawText).then(()=> showToast('Copied'));
+});
+
+/* ---------------- Refresh history ---------------- */
+document.getElementById('refreshHistoryBtn').addEventListener('click', async ()=>{
+  const box = document.getElementById('historyBox'); box.innerHTML = 'Loading...';
+  try{
+    const q = FB.query(FB.collection(FB.db, 'ocr_dynamic_rows'), FB.orderBy('created_at','desc'));
+    const snap = await FB.getDocs(q);
+    if(snap.empty){ box.innerHTML = '<div class="small-muted">No saved rows.</div>'; return; }
+    box.innerHTML = '';
+    snap.forEach(d => {
+      const data = d.data();
+      const node = document.createElement('div'); node.className = 'history-item';
+      const img = document.createElement('img'); img.className='history-thumb'; img.src = data.source_image || 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="84" height="64"><rect width="100%" height="100%" fill="#f2f6fa"/></svg>');
+      const body = document.createElement('div'); body.style.flex='1';
+      const keys = Object.keys(data).filter(k => k !== 'created_at' && k !== 'source_image');
+      const title = keys.map(k => data[k] ? String(data[k]).slice(0,40) : '').join(' • ');
+      const h = document.createElement('div'); h.style.fontWeight='700'; h.textContent = title || '(row)';
+      const meta = document.createElement('div'); meta.className='small-muted'; meta.textContent = data.created_at && data.created_at.toDate ? data.created_at.toDate().toLocaleString() : '';
+      body.appendChild(h); body.appendChild(meta);
+      node.appendChild(img); node.appendChild(body); box.appendChild(node);
+    });
+  }catch(err){ console.error(err); box.innerHTML = 'Failed: '+ (err.message || err); }
+});
+
+/* ---------------- Scan Text (fast) ---------------- */
+document.getElementById('scanTextBtn').addEventListener('click', async ()=>{
+  if(!selectedFile) return alert('Select image first');
+  try{ resultBox.textContent = 'Running OCR...'; const { text, usedBlob } = await performOCRWithOptionalCrop(selectedFile); lastRawText = text; resultBox.textContent = text || 'No text found'; } catch(err){ console.error(err); alert('OCR failed: '+ (err.message || err)); }
+});
+
+/* ---------------- Scan Table (dynamic) ---------------- */
+document.getElementById('scanTableBtn').addEventListener('click', async ()=> scanTableDynamic());
+
+/* ---------------- Clear ---------------- */
+document.getElementById('clearBtn').addEventListener('click', ()=> { selectedFile=null; previewImg.src=''; parsedRows=[]; detectedHeaders=[]; lastRawText=''; resultBox.textContent='Cleared.'; renderEmptyTable(); });
+
+function renderEmptyTable(){ tableHead.innerHTML = '<tr><th>#</th><th>Column1</th></tr>'; tableBody.innerHTML = '<tr><td colspan="2" class="small-muted">No table extracted yet.</td></tr>'; tableInfo.textContent='(Run table scan)'; }
+renderEmptyTable();
 
 </script>
-
 </body>
 </html>
-
-
-
