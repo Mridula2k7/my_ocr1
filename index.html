@@ -1,89 +1,164 @@
-<!doctype html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>OCR Mobile Pro</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR Pro — Mobile-Friendly Dashboard</title>
 
+<!-- Tesseract OCR -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<!-- Firebase -->
 <script type="module" src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-<script type="module" src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-:root{
-  --bg-dark:#071125; --panel:#0f1724; --muted:#9fb1c9; --accent:#2d9cff;
-  --bg-light:#f1f5f9; --text-light:#042a3a; --panel-light:#fff; --muted-light:#7b7b7b; --accent-light:#2d9cff;
-}
-body{
-  margin:0;font-family:Inter,Segoe UI,Arial;
-  background:var(--bg-dark);color:#e6f7ff;
-  overflow-x:hidden;
-}
-body.light{background:var(--bg-light);color:var(--text-light);}
-.container{width:100%;max-width:480px;margin:auto;padding:12px;display:flex;flex-direction:column;gap:12px;}
-.card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);}
-body.light .card{background:var(--panel-light);border:1px solid rgba(0,0,0,0.08);}
-input,textarea,button{font-family:inherit;font-size:14px}
-textarea{width:100%;min-height:140px;margin-top:8px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:#e6f7ff;resize:none;}
-body.light textarea{border:1px solid rgba(0,0,0,0.08);color:var(--text-light);background:#fefefe;}
-button{border:0;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;}
-button.primary{background:linear-gradient(90deg,var(--accent),#6ee8d5);color:#042a3a;margin-top:8px;}
-button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:#cfeeff;margin-top:8px;width:100%;}
-body.light button.ghost{border:1px solid rgba(0,0,0,0.08);color:var(--text-light);}
-#preview{width:100%;max-height:300px;object-fit:contain;border-radius:8px;display:none;margin-top:8px;}
-#toast{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#042a3a;color:#bff;padding:10px 14px;border-radius:8px;display:none;z-index:9999;}
-body.light #toast{background:#e6f7ff;color:#042a3a;}
-#loader{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.5);color:white;padding:12px;border-radius:8px;z-index:999;}
-.history-item{display:flex;gap:8px;align-items:flex-start;padding:10px;border-radius:10px;background:rgba(255,255,255,0.02);margin-top:6px;flex-direction:column;}
-body.light .history-item{background:rgba(0,0,0,0.03);}
-.muted{color:var(--muted);font-size:13px;}
-body.light .muted{color:var(--muted-light);}
-input[type=file]{display:none;}
+  :root{
+    --bg-dark:#071125; --panel-dark:#0f1724; --text-dark:#e6f7ff; --muted-dark:#9fb1c9; --accent:#2d9cff;
+    --bg-light:#f0f0f0; --panel-light:#ffffff; --text-light:#042a3a; --muted-light:#666; --accent:#2d9cff;
+  }
+  body{
+    margin:0; font-family:Inter,Segoe UI,Arial; 
+    background:var(--bg-dark); color:var(--text-dark); 
+    transition:all 0.3s ease;
+  }
+  body.light{
+    background:var(--bg-light); color:var(--text-light);
+  }
+
+  /* Layout */
+  .layout{display:flex; min-height:100vh; overflow-x:hidden;}
+  .sidebar{
+    width:260px; background:var(--panel-dark); padding:18px; border-right:1px solid rgba(255,255,255,0.03);
+    position:fixed; top:0; left:0; height:100%; z-index:999; transform:translateX(0); transition:0.3s ease;
+  }
+  .sidebar.light{background:var(--panel-light);}
+  .sidebar.hidden{transform:translateX(-280px);}
+  .brand{font-weight:800;font-size:18px;margin-bottom:8px;}
+  .small{color:var(--muted-dark); font-size:13px;}
+  .small.light{color:var(--muted-light);}
+  .menu{margin-top:18px; display:flex; flex-direction:column; gap:8px;}
+  .menu button{
+    background:transparent; border:0; color:#cfeeff; padding:10px; border-radius:8px; text-align:left; cursor:pointer;
+  }
+  .menu button.light{color:#042a3a;}
+  .menu button.active{background:linear-gradient(90deg,var(--accent),#6ee8d5); color:#042a3a;}
+  .content{flex:1; padding:20px; margin-left:260px; transition:margin 0.3s ease;}
+  body.mobile .content{margin-left:0;}
+  .topbar{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;}
+  .card{background:rgba(255,255,255,0.02); padding:14px; border-radius:12px; margin-top:14px;}
+  body.light .card{background:#fff; color:#042a3a; border:1px solid #ddd;}
+  .controls{display:flex; gap:8px; flex-wrap:wrap;}
+  button.primary{background:linear-gradient(90deg,var(--accent),#6ee8d5); border:0; padding:10px 12px; border-radius:8px; color:#042a3a; font-weight:700; cursor:pointer;}
+  button.ghost{background:transparent; border:1px solid rgba(255,255,255,0.04); padding:9px 12px; border-radius:8px; color:#cfeeff; cursor:pointer;}
+  button.ghost.light{color:#042a3a; border:1px solid #ddd;}
+  #preview{width:100%; max-height:420px; object-fit:contain; border-radius:10px; margin-top:12px; display:none;}
+  textarea{width:100%; min-height:140px; margin-top:12px; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:#e6f7ff;}
+  textarea.light{background:#fff; color:#042a3a; border:1px solid #ccc;}
+  #toast{position:fixed; right:18px; bottom:18px; background:#042a3a; color:#bff; padding:10px 14px; border-radius:8px; display:none; z-index:9999;}
+  .row{display:flex; gap:8px; align-items:center;}
+  .history-item{display:flex; gap:12px; align-items:flex-start; padding:10px; border-radius:10px; background:rgba(255,255,255,0.02); margin-top:8px;}
+  body.light .history-item{background:#f0f0f0;}
+  .history-thumb{width:120px; height:80px; object-fit:cover; border-radius:6px;}
+  .muted{color:var(--muted-dark); font-size:13px;}
+  .muted.light{color:var(--muted-light);}
+  /* Mobile Hamburger */
+  #hamburger{display:none; cursor:pointer; font-size:24px;}
+  body.mobile #hamburger{display:block;}
+  /* Responsive */
+  @media(max-width:900px){
+    .sidebar{position:fixed; z-index:999; transform:translateX(-280px);}
+    .content{margin-left:0;}
+  }
 </style>
 </head>
 <body>
-<div id="loader">OCR in progress...</div>
+
 <div id="toast">Saved ✔</div>
 
-<div class="container">
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar hidden" id="sidebar">
+    <div class="brand">OCR Pro — Dashboard</div>
+    <div class="small" id="sidebarSmall">Scan • OCR • History</div>
+    <div class="menu" role="tablist">
+      <button class="active" data-screen="scan">Scanner</button>
+      <button data-screen="history">History</button>
+      <button data-screen="settings">Settings</button>
+    </div>
 
-  <div class="card">
-    <h2>OCR Scanner</h2>
-    <div class="muted">Upload image or capture via camera</div>
+    <div style="margin-top:18px">
+      <div class="muted" id="themeLabel">Dark / Light</div>
+      <button id="themeBtn" class="ghost">Toggle Theme</button>
+    </div>
+  </aside>
 
-    <label class="ghost" style="cursor:pointer;width:100%;text-align:center;">Upload Image
-      <input type="file" id="fileInput" accept="image/*" multiple>
-    </label>
+  <!-- Main -->
+  <main class="content">
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span id="hamburger">&#9776;</span>
+        <div>
+          <h2 style="margin:0">Scanner</h2>
+          <div class="muted" id="topbarMuted">Upload/capture image — export PDF/TXT</div>
+        </div>
+      </div>
+    </div>
 
-    <button class="ghost" id="openCam">Open Camera</button>
-    <button class="ghost" id="captureBtn" style="display:none">Capture</button>
-    <button class="ghost" id="switchCam">Front / Rear</button>
-    <img id="preview" alt="preview">
+    <!-- Scanner Card -->
+    <section id="screen-scan" class="card">
+      <div class="row">
+        <label class="ghost" style="cursor:pointer">
+          Upload
+          <input id="fileInput" type="file" accept="image/*" multiple style="display:none">
+        </label>
 
-    <textarea id="ocrText" placeholder="OCR result will appear here"></textarea>
+        <button id="openCam" class="ghost">Open Camera</button>
+        <button id="captureBtn" class="ghost" style="display:none">Capture</button>
+        <button id="switchCam" class="ghost">Front / Rear</button>
+      </div>
 
-    <button class="primary" id="btnOCR">Extract Text</button>
-    <button class="ghost" id="btnTxt">Download TXT</button>
-    <button class="ghost" id="btnPDF">Export PDF</button>
-    <button class="ghost" id="btnSave">Save to Firebase</button>
-    <button class="ghost" id="btnClear">Clear</button>
-    <button class="ghost" id="themeBtn">Toggle Theme</button>
-  </div>
+      <img id="preview" alt="preview">
 
-  <div class="card">
-    <h3>History</h3>
-    <input id="searchText" placeholder="Search text..." style="width:100%;padding:8px;border-radius:6px;border:1px solid #ccc;">
-    <button class="ghost" id="btnRefresh">Refresh</button>
-    <div id="historyList">Loading history...</div>
-  </div>
+      <div class="row" style="margin-top:12px">
+        <button id="btnOCR" class="primary">Extract Text</button>
+        <button id="btnSave" class="ghost">Save</button>
+        <button id="btnClear" class="ghost">Clear</button>
+        <button id="btnExportPDF" class="ghost">Export PDF</button>
+        <button id="btnExportTXT" class="ghost">Export TXT</button>
+      </div>
 
+      <div style="margin-top:12px">
+        <div class="muted">OCR Result</div>
+        <textarea id="ocrText" placeholder="Extracted text will appear here..."></textarea>
+      </div>
+    </section>
+
+    <!-- History Card -->
+    <section id="screen-history" class="card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><h3 style="margin:0">History</h3><div class="muted">Saved scans</div></div>
+        <div>
+          <button id="btnRefresh" class="ghost">Refresh</button>
+        </div>
+      </div>
+
+      <div id="historyList" style="margin-top:12px">Loading history...</div>
+    </section>
+
+    <!-- Settings -->
+    <section id="screen-settings" class="card" style="display:none">
+      <h3 style="margin-top:0">Settings</h3>
+      <div class="muted" id="settingsMuted">Firebase OCR App Settings</div>
+    </section>
+
+  </main>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, addDoc, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+/* ---------------- FIREBASE ---------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyD69D9mpeIdbGTWVKTlb7QD0EQdE3p7KSM",
   authDomain: "my-ocr-c7d74.firebaseapp.com",
@@ -96,161 +171,190 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* --- UI refs --- */
-const fileInput=document.getElementById('fileInput');
-const openCam=document.getElementById('openCam');
-const captureBtn=document.getElementById('captureBtn');
-const switchCam=document.getElementById('switchCam');
-const preview=document.getElementById('preview');
-const btnOCR=document.getElementById('btnOCR');
-const btnTxt=document.getElementById('btnTxt');
-const btnPDF=document.getElementById('btnPDF');
-const ocrText=document.getElementById('ocrText');
-const btnSave=document.getElementById('btnSave');
-const btnClear=document.getElementById('btnClear');
-const themeBtn=document.getElementById('themeBtn');
-const historyList=document.getElementById('historyList');
-const btnRefresh=document.getElementById('btnRefresh');
-const searchInput=document.getElementById('searchText');
-const toast=document.getElementById('toast');
-const loader=document.getElementById('loader');
+/* ----------------- UI ----------------- */
+const sidebar = document.getElementById('sidebar');
+const hamburger = document.getElementById('hamburger');
+const menuBtns = document.querySelectorAll('.menu button');
+const screenScan = document.getElementById('screen-scan');
+const screenHistory = document.getElementById('screen-history');
+const screenSettings = document.getElementById('screen-settings');
+const fileInput = document.getElementById('fileInput');
+const preview = document.getElementById('preview');
+const btnOCR = document.getElementById('btnOCR');
+const btnSave = document.getElementById('btnSave');
+const btnClear = document.getElementById('btnClear');
+const btnExportPDF = document.getElementById('btnExportPDF');
+const btnExportTXT = document.getElementById('btnExportTXT');
+const ocrText = document.getElementById('ocrText');
+const toast = document.getElementById('toast');
+const btnRefresh = document.getElementById('btnRefresh');
+const openCam = document.getElementById('openCam');
+const captureBtn = document.getElementById('captureBtn');
+const switchCam = document.getElementById('switchCam');
 
-let selectedBlobs=[]; let stream=null; let facingMode='environment';
+let selectedBlobs = [];
+let stream = null;
+let facingMode = 'environment';
 
-/* --- Theme --- */
-themeBtn.addEventListener('click',()=>document.body.classList.toggle('light'));
-
-/* --- File Upload --- */
-fileInput.addEventListener('change',e=>{
-  const files=Array.from(e.target.files);
-  if(!files.length)return;
-  selectedBlobs=files;
-  preview.src=URL.createObjectURL(files[0]);
-  preview.style.display='block';
-  ocrText.value='';
+/* ----------------- Theme ----------------- */
+const themeBtn = document.getElementById('themeBtn');
+themeBtn.addEventListener('click', ()=>{
+  document.body.classList.toggle('light');
+  document.querySelectorAll('.ghost').forEach(b=>b.classList.toggle('light'));
+  document.querySelectorAll('.menu button').forEach(b=>b.classList.toggle('light'));
+  document.querySelectorAll('.muted').forEach(d=>d.classList.toggle('light'));
+  ocrText.classList.toggle('light');
 });
 
-/* --- Camera --- */
-openCam.addEventListener('click',async ()=>{
+/* ----------------- Hamburger ----------------- */
+hamburger.addEventListener('click', ()=>{
+  sidebar.classList.toggle('hidden');
+});
+
+/* ----------------- Navigation ----------------- */
+menuBtns.forEach(b=>{
+  b.addEventListener('click', ()=>{
+    menuBtns.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const screen = b.dataset.screen;
+    screenScan.style.display = screen==='scan' ? '' : 'none';
+    screenHistory.style.display = screen==='history' ? '' : 'none';
+    screenSettings.style.display = screen==='settings' ? '' : 'none';
+    if(screen==='history') loadHistory();
+    if(document.body.clientWidth < 900) sidebar.classList.add('hidden');
+  });
+});
+
+/* ----------------- File Upload ----------------- */
+fileInput.addEventListener('change', e=>{
+  selectedBlobs = Array.from(e.target.files);
+  if(selectedBlobs.length>0){
+    preview.src = URL.createObjectURL(selectedBlobs[0]);
+    preview.style.display='block';
+    ocrText.value='';
+  }
+});
+
+/* ----------------- Camera ----------------- */
+openCam.addEventListener('click', async ()=>{
   try{
     if(stream){stream.getTracks().forEach(t=>t.stop()); stream=null;}
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode},audio:false});
-    const v=document.createElement('video');
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode}, audio:false});
+    const v = document.createElement('video');
     v.autoplay=true; v.playsInline=true; v.muted=true;
-    v.srcObject=stream; v.style.width='100%';
+    v.srcObject = stream;
+    v.style.width = preview.clientWidth + 'px';
     preview.style.display='none';
-    preview.parentNode.insertBefore(v,preview);
+    preview.parentNode.insertBefore(v, preview);
     captureBtn.style.display='inline-block';
     openCam.style.display='none';
-    captureBtn.onclick=()=>{
-      const canvas=document.createElement('canvas');
-      canvas.width=v.videoWidth||1280;
-      canvas.height=v.videoHeight||720;
+    captureBtn.onclick = ()=>{
+      const canvas = document.createElement('canvas');
+      canvas.width=v.videoWidth; canvas.height=v.videoHeight;
       canvas.getContext('2d').drawImage(v,0,0,canvas.width,canvas.height);
       canvas.toBlob(b=>{
         selectedBlobs=[b];
         preview.src=URL.createObjectURL(b);
         preview.style.display='block';
-        v.remove();
-        stream.getTracks().forEach(t=>t.stop()); stream=null;
+        v.remove(); stream.getTracks().forEach(t=>t.stop()); stream=null;
         captureBtn.style.display='none'; openCam.style.display='inline-block';
         ocrText.value='';
-      },'image/jpeg',0.95);
+      }, 'image/jpeg', 0.95);
     };
-  }catch(err){alert('Camera error: '+err.message);}
+  } catch(err){ alert('Camera error: '+err.message);}
 });
 
-switchCam.addEventListener('click',()=>{
-  facingMode=(facingMode==='environment')?'user':'environment';
-  if(stream){
-    stream.getTracks().forEach(t=>t.stop()); stream=null;
-    const v=document.querySelector('video'); if(v)v.remove();
-    captureBtn.style.display='none'; openCam.style.display='inline-block';
-    openCam.click();
-  }
+switchCam.addEventListener('click', ()=>{
+  facingMode = (facingMode==='environment')?'user':'environment';
+  if(stream){stream.getTracks().forEach(t=>t.stop()); stream=null; const v=document.querySelector('video'); if(v) v.remove(); captureBtn.style.display='none'; openCam.style.display='inline-block'; openCam.click();}
 });
 
-/* --- OCR --- */
-async function performOCR(blob){
-  loader.style.display='block';
-  const { data }=await Tesseract.recognize(blob,'eng',{logger:m=>{}});
-  loader.style.display='none';
-  ocrText.value=data.text.trim();
-}
-
-btnOCR.addEventListener('click',async ()=>{
-  if(!selectedBlobs.length)return alert('Select or capture image first');
-  for(const b of selectedBlobs) await performOCR(b);
+/* ----------------- OCR ----------------- */
+btnOCR.addEventListener('click', async ()=>{
+  if(selectedBlobs.length===0) return alert('Upload or capture image first');
+  try{
+    btnOCR.disabled=true; btnOCR.textContent='Processing...';
+    const {data} = await Tesseract.recognize(selectedBlobs[0], 'eng');
+    ocrText.value = data?.text?.trim() || '';
+  } catch(e){alert('OCR failed: '+e.message);}
+  finally{btnOCR.disabled=false; btnOCR.textContent='Extract Text';}
 });
 
-/* --- Save to Firebase --- */
-btnSave.addEventListener('click',async ()=>{
-  const text=ocrText.value.trim();
-  if(!text)return alert('No OCR text');
+/* ----------------- Save ----------------- */
+btnSave.addEventListener('click', async ()=>{
+  const text = ocrText.value.trim();
+  if(!text) return alert('No OCR text');
   let imgData='';
   try{
-    if(preview.src){
-      const r=await fetch(preview.src);
-      const blob=await r.blob();
-      imgData=await blobToDataURL(blob);
-    }
-  }catch(e){console.warn(e);}
+    const r = await fetch(preview.src);
+    const b = await r.blob();
+    imgData = await blobToDataURL(b);
+  } catch(e){console.warn(e);}
   try{
-    await addDoc(collection(db,'ocr_records'),{text,image:imgData,createdAt:new Date().toISOString()});
+    await addDoc(collection(db,'ocr_records'), {text, image:imgData, createdAt:new Date().toISOString()});
     showToast('Saved to Firebase');
     loadHistory();
-  }catch(e){alert('Save failed: '+e.message);}
+  } catch(e){alert('Save failed: '+e.message);}
 });
 
-btnClear.addEventListener('click',()=>{
-  selectedBlobs=[]; preview.src=''; preview.style.display='none'; ocrText.value='';
+/* ----------------- Export PDF/TXT ----------------- */
+btnExportTXT.addEventListener('click', ()=>{
+  const text = ocrText.value.trim();
+  if(!text) return alert('No OCR text');
+  const blob = new Blob([text], {type:'text/plain'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ocr.txt'; a.click();
 });
 
-/* --- Download TXT --- */
-btnTxt.addEventListener('click',()=>{
-  const text=ocrText.value.trim(); if(!text)return alert('No text to download');
-  const blob=new Blob([text],{type:'text/plain'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ocr.txt'; a.click(); URL.revokeObjectURL(a.href);
-});
-
-/* --- Export PDF --- */
-btnPDF.addEventListener('click',()=>{
-  const text=ocrText.value.trim(); if(!text)return alert('No text to export');
-  const { jsPDF }=window.jspdf;
-  const doc=new jsPDF();
-  const lines=doc.splitTextToSize(text,180);
-  doc.text(lines,10,10);
+btnExportPDF.addEventListener('click', ()=>{
+  const text = ocrText.value.trim();
+  if(!text) return alert('No OCR text');
+  const doc = new jsPDF();
+  const lines = doc.splitTextToSize(text, 180);
+  doc.text(lines, 10, 10);
   doc.save('ocr.pdf');
 });
 
-/* --- History --- */
+/* ----------------- History ----------------- */
 async function loadHistory(){
+  const historyList=document.getElementById('historyList');
   historyList.innerHTML='Loading...';
   try{
     const q=query(collection(db,'ocr_records'),orderBy('createdAt','desc'));
-    const snap=await getDocs(q);
-    const items=[];
-    snap.forEach(d=>items.push(Object.assign({id:d.id},d.data())));
-    if(items.length===0){historyList.innerHTML='<div class="muted">No records yet.</div>'}else{
-      historyList.innerHTML='';
-      const searchVal=searchInput.value.toLowerCase();
-      items.filter(it=>it.text.toLowerCase().includes(searchVal)).forEach(it=>{
-        const node=document.createElement('div'); node.className='history-item';
-        if(it.image){const img=document.createElement('img'); img.src=it.image; img.style.width='100%'; img.style.borderRadius='6px'; node.appendChild(img);}
-        const div=document.createElement('div');
-        div.innerHTML=`<div class="muted">${new Date(it.createdAt).toLocaleString()}</div><div>${it.text.substring(0,180)}</div>`;
-        node.appendChild(div);
-        historyList.appendChild(node);
-      });
-    }
-  }catch(e){historyList.innerHTML='Error loading history: '+e.message;}
+    const snap=await getDocs(q); const items=[];
+    snap.forEach(d=>items.push(Object.assign({id:d.id}, d.data())));
+    if(items.length===0){historyList.innerHTML='<div class="muted">No records yet.</div>'; return;}
+    historyList.innerHTML='';
+    items.forEach(it=>{
+      const node=document.createElement('div'); node.className='history-item';
+      const img=document.createElement('img'); img.className='history-thumb'; img.src=it.image||'';
+      const body=document.createElement('div'); body.style.flex='1';
+      const t=document.createElement('div'); t.style.fontWeight='700'; t.textContent=(it.text||'').slice(0,180);
+      const m=document.createElement('div'); m.className='muted'; m.textContent=new Date(it.createdAt||'').toLocaleString();
+      body.appendChild(t); body.appendChild(m);
+      node.appendChild(img); node.appendChild(body);
+      historyList.appendChild(node);
+    });
+  } catch(e){historyList.innerHTML='<div class="muted">Load failed</div>';}
 }
-btnRefresh.addEventListener('click',loadHistory);
-searchInput.addEventListener('input',loadHistory);
+btnRefresh.addEventListener('click', loadHistory);
 
-/* --- Toast --- */
-function showToast(msg){toast.textContent=msg; toast.style.display='block'; setTimeout(()=>toast.style.display='none',2000);}
-function blobToDataURL(blob){return new Promise(res=>{const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob);})}
+/* ----------------- Helpers ----------------- */
+function showToast(msg='Saved'){
+  toast.textContent=msg; toast.style.display='block';
+  setTimeout(()=>toast.style.display='none',2200);
+}
+function blobToDataURL(blob){return new Promise((res,rej)=>{const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob);});}
+
+/* ----------------- Auto load ----------------- */
+loadHistory();
+
+/* ----------------- Mobile detection ----------------- */
+if(window.innerWidth<900){document.body.classList.add('mobile'); sidebar.classList.add('hidden');}
+window.addEventListener('resize', ()=>{document.body.classList.toggle('mobile',window.innerWidth<900);});
 </script>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 </body>
 </html>
